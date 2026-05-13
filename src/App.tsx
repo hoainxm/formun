@@ -63,7 +63,7 @@ const Field = ({
 
 const inputClass = "min-h-8 min-w-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20";
 const panelClass = "min-w-0 rounded-xl border border-border bg-card p-3 shadow-panel";
-const groupClass = "flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-muted/40 p-1";
+const groupClass = "flex shrink-0 flex-nowrap items-center gap-1.5 rounded-lg border border-border bg-muted/40 p-1 lg:flex-wrap";
 
 const nowIso = () => new Date().toISOString();
 const SHARE_PREFIX = "#share=";
@@ -1004,7 +1004,7 @@ const App = () => {
               {t.saveName}
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
             <div className={groupClass}>
               <Button variant="secondary" onClick={handleExportJson}>
                 <Download className="h-4 w-4" />
@@ -1046,7 +1046,7 @@ const App = () => {
         </header>
 
         <section className="grid min-h-0 min-w-0 gap-1.5 xl:grid-cols-[220px_minmax(0,1fr)_260px]">
-          <aside className="grid min-h-0 min-w-0 gap-2 overflow-y-auto pr-1">
+          <aside className="order-2 grid min-h-0 min-w-0 gap-2 overflow-y-visible xl:order-1 xl:overflow-y-auto xl:pr-1">
             <div className={panelClass}>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold">{t.projects}</h2>
@@ -1055,7 +1055,7 @@ const App = () => {
                 </Button>
               </div>
               <input className={`${inputClass} mb-2 w-full`} placeholder={t.searchProjects} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <div className="grid max-h-72 gap-2 overflow-auto pr-1">
+              <div className="grid max-h-56 gap-2 overflow-auto pr-1 xl:max-h-72">
                 {filteredItems.map((item) => (
                   <button
                     key={item.id}
@@ -1081,7 +1081,7 @@ const App = () => {
                   </Button>
                 </div>
               </div>
-              <div className="grid max-h-96 gap-2 overflow-auto pr-1">
+              <div className="grid max-h-64 gap-2 overflow-auto pr-1 xl:max-h-96">
                 {sortedDancers.map((dancer) => (
                   <button
                     key={dancer.id}
@@ -1102,7 +1102,7 @@ const App = () => {
             </div>
           </aside>
 
-          <section className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_118px] gap-1.5 overflow-hidden">
+          <section className="order-1 grid min-h-[78svh] min-w-0 grid-rows-[minmax(0,1fr)_118px] gap-1.5 overflow-hidden xl:order-2 xl:min-h-0">
             <div className={`${panelClass} grid min-h-0 grid-rows-[auto_minmax(0,1fr)]`}>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
                 <div className="min-w-0">
@@ -1128,7 +1128,7 @@ const App = () => {
                 <div className="pb-1 text-center text-xs font-semibold tracking-wide text-muted-foreground">BACKSTAGE</div>
                 <div
                   ref={stageRef}
-                  className={`relative mx-auto h-full max-h-full max-w-full overflow-hidden rounded-xl border border-border bg-stage ${showGrid ? "stage-grid" : ""}`}
+                  className={`stage-touch relative mx-auto h-full max-h-full max-w-full overflow-hidden rounded-xl border border-border bg-stage ${showGrid ? "stage-grid" : ""}`}
                   style={{
                     aspectRatio: `${active.stage.width} / ${active.stage.height}`,
                     backgroundSize: `${(active.stage.gridSize / active.stage.width) * 100}% ${(active.stage.gridSize / active.stage.height) * 100}%`,
@@ -1259,7 +1259,7 @@ const App = () => {
             </div>
           </section>
 
-          <aside className="grid min-h-0 min-w-0 content-start gap-3 overflow-y-auto pr-1">
+          <aside className="order-3 grid min-h-0 min-w-0 content-start gap-2 overflow-y-visible xl:overflow-y-auto xl:pr-1">
             <div className={panelClass}>
               <h2 className="mb-2 text-sm font-semibold">{t.stage}</h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">

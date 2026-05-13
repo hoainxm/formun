@@ -64,6 +64,10 @@ select {
     linear-gradient(to bottom, hsl(var(--grid)) 1px, transparent 1px);
 }
 
+.stage-touch {
+  touch-action: none;
+}
+
 .print-page {
   width: 1122px;
   min-height: 793px;
