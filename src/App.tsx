@@ -389,7 +389,7 @@ const App = () => {
   const activeFormationIndex = sortedFormations.findIndex((formation) => formation.id === activeFormation?.id);
   const t = copy[language];
   const activeTransitionSeconds = Math.max(1.5, activeFormation?.durationSeconds || transitionSeconds || 6);
-  const requestConfirm = (title: string, message: string, onConfirm: () => void, confirmLabel = t.confirm) => {
+  const requestConfirm = (title: string, message: string, onConfirm: () => void, confirmLabel: string = t.confirm) => {
     setConfirmDialog({ title, message, onConfirm, confirmLabel });
   };
   const showNotice = (title: string, message: string) => {
@@ -498,7 +498,7 @@ const App = () => {
                 {showPaths && previousFormation && (
                   <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${active.stage.width} ${active.stage.height}`}>
                     {sortedDancers.map((dancer) => {
-                      const from = previousFormation.positions[dancer.id];
+                      const from = previousFormation?.positions[dancer.id];
                       const to = activeFormation.positions[dancer.id];
                       if (!from || !to) return null;
                       return <path key={dancer.id} d={getDancerPath(from, to)} className="fill-none stroke-primary" strokeWidth="0.4" strokeDasharray="1 1" />;
@@ -624,7 +624,7 @@ const App = () => {
             {showPaths && previousFormation && (
               <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${active.stage.width} ${active.stage.height}`}>
                 {sortedDancers.map((dancer) => {
-                  const from = previousFormation.positions[dancer.id];
+                  const from = previousFormation?.positions[dancer.id];
                   const to = activeFormation.positions[dancer.id];
                   if (!from || !to) return null;
                   return <line key={dancer.id} x1={from.x} y1={from.y} x2={to.x} y2={to.y} className="stroke-primary" strokeWidth="0.4" strokeDasharray="1 1" />;
@@ -1148,7 +1148,7 @@ const App = () => {
                 {showPaths && previousFormation && (
                   <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${active.stage.width} ${active.stage.height}`}>
                     {sortedDancers.map((dancer) => {
-                      const from = previousFormation.positions[dancer.id];
+                      const from = previousFormation?.positions[dancer.id];
                       const to = activeFormation.positions[dancer.id];
                       if (!from || !to) return null;
                       return (
@@ -1181,7 +1181,8 @@ const App = () => {
                 ))}
                 {selectedDancer && previousFormation?.positions[selectedDancer.id] && activeFormation.positions[selectedDancer.id]?.path?.type === "curve" && (() => {
                   const selectedPosition = activeFormation.positions[selectedDancer.id];
-                  const previousPosition = previousFormation.positions[selectedDancer.id];
+                  const previousPosition = previousFormation?.positions[selectedDancer.id];
+                  if (!previousPosition) return null;
                   const controlX = selectedPosition.path?.controlX ?? (previousPosition.x + selectedPosition.x) / 2;
                   const controlY = selectedPosition.path?.controlY ?? Math.min(previousPosition.y, selectedPosition.y) - 10;
                   return (
@@ -1437,7 +1438,7 @@ const App = () => {
                               <input
                                 className={inputClass}
                                 type="number"
-                                value={activeFormation.positions[selectedDancer.id].path?.controlX ?? Math.round((previousFormation.positions[selectedDancer.id].x + activeFormation.positions[selectedDancer.id].x) / 2)}
+                                value={activeFormation.positions[selectedDancer.id].path?.controlX ?? Math.round(((previousFormation?.positions[selectedDancer.id]?.x || activeFormation.positions[selectedDancer.id].x) + activeFormation.positions[selectedDancer.id].x) / 2)}
                                 onChange={(event) => updateDancerPath(selectedDancer.id, { controlX: Number(event.target.value) || 0 })}
                               />
                             </Field>
@@ -1445,7 +1446,7 @@ const App = () => {
                               <input
                                 className={inputClass}
                                 type="number"
-                                value={activeFormation.positions[selectedDancer.id].path?.controlY ?? Math.round(Math.min(previousFormation.positions[selectedDancer.id].y, activeFormation.positions[selectedDancer.id].y) - 10)}
+                                value={activeFormation.positions[selectedDancer.id].path?.controlY ?? Math.round(Math.min(previousFormation?.positions[selectedDancer.id]?.y || activeFormation.positions[selectedDancer.id].y, activeFormation.positions[selectedDancer.id].y) - 10)}
                                 onChange={(event) => updateDancerPath(selectedDancer.id, { controlY: Number(event.target.value) || 0 })}
                               />
                             </Field>
