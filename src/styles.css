@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 33% 97%;
+  --foreground: 207 41% 12%;
+  --card: 0 0% 100%;
+  --muted: 210 24% 92%;
+  --muted-foreground: 215 20% 45%;
+  --border: 216 22% 86%;
+  --primary: 213 88% 54%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 188 35% 41%;
+  --success: 102 32% 49%;
+  --warning: 32 91% 39%;
+  --danger: 7 100% 33%;
+  --stage: 210 40% 99%;
+  --grid: 214 28% 84%;
+  --shadow: 212 32% 18%;
+}
+
+.dark {
+  --background: 215 28% 10%;
+  --foreground: 210 32% 94%;
+  --card: 215 24% 14%;
+  --muted: 215 22% 20%;
+  --muted-foreground: 215 15% 70%;
+  --border: 215 18% 28%;
+  --primary: 213 88% 62%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 188 35% 50%;
+  --success: 102 32% 56%;
+  --warning: 38 90% 56%;
+  --danger: 7 86% 58%;
+  --stage: 215 18% 18%;
+  --grid: 215 18% 30%;
+  --shadow: 0 0% 0%;
+}
+
+html {
+  background: hsl(var(--background));
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.stage-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--grid)) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--grid)) 1px, transparent 1px);
+}
+
+.print-page {
+  width: 1122px;
+  min-height: 793px;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.pdf-stage-frame {
+  width: 860px;
+  height: 516px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--stage));
+}
+
+.pdf-stage-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pdf-grid-line {
+  stroke: hsl(var(--grid));
+  stroke-width: 0.15;
+}
+
+.pdf-stage-label {
+  fill: hsl(var(--muted-foreground));
+  font-size: 2.4px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.pdf-dancer text {
+  fill: hsl(var(--primary-foreground));
+  font-size: 2.4px;
+  font-weight: 700;
+}
