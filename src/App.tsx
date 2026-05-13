@@ -144,6 +144,7 @@ const copy = {
     guide: "Guide",
     projects: "Projects",
     searchProjects: "Search projects",
+    localSaveNote: "Progress saves automatically on this device.",
     formations: "formations",
     dancers: "dancers",
     stage: "Stage",
@@ -188,6 +189,7 @@ const copy = {
     prev: "Prev",
     next: "Next",
     exit: "Exit",
+    replay: "Replay",
     comment: "Comment",
     noNotes: "No notes for this formation.",
   },
@@ -212,6 +214,7 @@ const copy = {
     guide: "Hướng dẫn",
     projects: "Dự án",
     searchProjects: "Tìm project",
+    localSaveNote: "Tiến độ tự lưu trên thiết bị này.",
     formations: "đội hình",
     dancers: "dancer",
     stage: "Sân khấu",
@@ -256,6 +259,7 @@ const copy = {
     prev: "Trước",
     next: "Tiếp",
     exit: "Thoát",
+    replay: "Phát lại",
     comment: "Ghi chú",
     noNotes: "Formation này chưa có ghi chú.",
   },
@@ -317,6 +321,7 @@ const App = () => {
   const [language, setLanguage] = useState<"en" | "vi">("en");
   const [draftProjectName, setDraftProjectName] = useState("");
   const [transitionSeconds, setTransitionSeconds] = useState(6);
+  const [transitionSecondsText, setTransitionSecondsText] = useState("6");
   const [animationProgress, setAnimationProgress] = useState(1);
   const [isAnimating, setIsAnimating] = useState(false);
   const [query, setQuery] = useState("");
@@ -360,7 +365,9 @@ const App = () => {
   );
 
   useEffect(() => {
-    setTransitionSeconds(Math.max(1.5, activeFormation?.durationSeconds || 6));
+    const seconds = Math.max(0.1, activeFormation?.durationSeconds || 6);
+    setTransitionSeconds(seconds);
+    setTransitionSecondsText(String(seconds));
   }, [activeFormation?.id, activeFormation?.durationSeconds]);
   const previousFormation = useMemo(
     () => (active && activeFormation ? getPreviousFormation(sortedFormations, activeFormation.id) : undefined),
@@ -388,7 +395,18 @@ const App = () => {
   );
   const activeFormationIndex = sortedFormations.findIndex((formation) => formation.id === activeFormation?.id);
   const t = copy[language];
-  const activeTransitionSeconds = Math.max(1.5, activeFormation?.durationSeconds || transitionSeconds || 6);
+  const activeTransitionSeconds = Math.max(0.1, activeFormation?.durationSeconds || transitionSeconds || 6);
+  const updateTransitionSeconds = (value: string) => {
+    const normalized = value.replace(",", ".");
+    if (!/^\d*\.?\d*$/.test(normalized)) return;
+    setTransitionSecondsText(value);
+    if (!normalized || normalized === ".") return;
+    const seconds = Number(normalized);
+    if (!Number.isFinite(seconds)) return;
+    const next = Math.max(0.1, seconds);
+    setTransitionSeconds(next);
+    updateFormation(activeFormation.id, (formation) => ({ ...formation, durationSeconds: next }));
+  };
   const requestConfirm = (title: string, message: string, onConfirm: () => void, confirmLabel: string = t.confirm) => {
     setConfirmDialog({ title, message, onConfirm, confirmLabel });
   };
@@ -475,9 +493,16 @@ const App = () => {
                 <ChevronLeft className="h-4 w-4" />
                 {t.prev}
               </Button>
-              <Button variant="secondary" onClick={() => goToFormation(activeFormationIndex + 1)} disabled={activeFormationIndex >= sortedFormations.length - 1}>
+            <Button variant="secondary" onClick={() => goToFormation(activeFormationIndex + 1)} disabled={activeFormationIndex >= sortedFormations.length - 1}>
                 {t.next}
                 <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" onClick={() => {
+                setAnimationProgress(0);
+                setIsAnimating(activeFormationIndex > 0);
+              }} disabled={activeFormationIndex <= 0}>
+                <Play className="h-4 w-4" />
+                {t.replay}
               </Button>
               <Button variant="secondary" onClick={() => setPresentMode(false)}>
                 <X className="h-4 w-4" />
@@ -527,7 +552,7 @@ const App = () => {
                   return (
                     <div
                       key={dancer.id}
-                      className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-sm font-semibold text-primary-foreground shadow-md transition-[left,top] duration-75 ${dancer.color} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}
+                      className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-sm font-semibold text-primary-foreground shadow-md ${dancer.color} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}
                       style={{
                         left: `${(displayPosition.x / active.stage.width) * 100}%`,
                         top: `${(displayPosition.y / active.stage.height) * 100}%`,
@@ -1025,10 +1050,14 @@ const App = () => {
               </Button>
             </div>
             <div className={groupClass}>
-              <Button variant="secondary" onClick={() => setPresentMode(true)}>
-                <Play className="h-4 w-4" />
-                {t.present}
-              </Button>
+              <Button variant="secondary" onClick={() => {
+                setPresentMode(true);
+                setAnimationProgress(activeFormationIndex > 0 ? 0 : 1);
+                setIsAnimating(activeFormationIndex > 0);
+              }}>
+              <Play className="h-4 w-4" />
+              {t.present}
+            </Button>
               <Button variant="secondary" onClick={() => setDarkMode((value) => !value)} aria-label="Toggle dark mode">
                 {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 {darkMode ? t.light : t.dark}
@@ -1055,6 +1084,7 @@ const App = () => {
                 </Button>
               </div>
               <input className={`${inputClass} mb-2 w-full`} placeholder={t.searchProjects} value={query} onChange={(event) => setQuery(event.target.value)} />
+              <p className="mb-2 text-xs text-muted-foreground">{t.localSaveNote}</p>
               <div className="grid max-h-56 gap-2 overflow-auto pr-1 xl:max-h-72">
                 {filteredItems.map((item) => (
                   <button
@@ -1102,7 +1132,7 @@ const App = () => {
             </div>
           </aside>
 
-          <section className="order-1 grid min-h-[78svh] min-w-0 grid-rows-[minmax(0,1fr)_118px] gap-1.5 overflow-hidden xl:order-2 xl:min-h-0">
+          <section className="order-1 grid h-[82svh] min-h-[560px] min-w-0 grid-rows-[minmax(0,1fr)_118px] gap-1.5 overflow-hidden xl:order-2 xl:h-auto xl:min-h-0">
             <div className={`${panelClass} grid min-h-0 grid-rows-[auto_minmax(0,1fr)]`}>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
                 <div className="min-w-0">
@@ -1128,7 +1158,7 @@ const App = () => {
                 <div className="pb-1 text-center text-xs font-semibold tracking-wide text-muted-foreground">BACKSTAGE</div>
                 <div
                   ref={stageRef}
-                  className={`stage-touch relative mx-auto h-full max-h-full max-w-full overflow-hidden rounded-xl border border-border bg-stage ${showGrid ? "stage-grid" : ""}`}
+                  className={`stage-touch relative mx-auto h-full min-h-[320px] max-h-full max-w-full overflow-hidden rounded-xl border border-border bg-stage ${showGrid ? "stage-grid" : ""}`}
                   style={{
                     aspectRatio: `${active.stage.width} / ${active.stage.height}`,
                     backgroundSize: `${(active.stage.gridSize / active.stage.width) * 100}% ${(active.stage.gridSize / active.stage.height) * 100}%`,
@@ -1264,13 +1294,46 @@ const App = () => {
               <h2 className="mb-2 text-sm font-semibold">{t.stage}</h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                 <Field label={t.width}>
-                  <input className={inputClass} type="number" value={active.stage.width} onChange={(event) => updateActive((current) => ({ ...current, stage: { ...current.stage, width: Number(event.target.value) || 80 } }))} />
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={active.stage.width}
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      if (Number.isNaN(value)) return;
+                      updateActive((current) => ({ ...current, stage: { ...current.stage, width: Math.max(0.1, value) } }));
+                    }}
+                  />
                 </Field>
                 <Field label={t.height}>
-                  <input className={inputClass} type="number" value={active.stage.height} onChange={(event) => updateActive((current) => ({ ...current, stage: { ...current.stage, height: Number(event.target.value) || 60 } }))} />
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={active.stage.height}
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      if (Number.isNaN(value)) return;
+                      updateActive((current) => ({ ...current, stage: { ...current.stage, height: Math.max(0.1, value) } }));
+                    }}
+                  />
                 </Field>
                 <Field label={t.grid}>
-                  <input className={inputClass} type="number" value={active.stage.gridSize} onChange={(event) => updateActive((current) => ({ ...current, stage: { ...current.stage, gridSize: Number(event.target.value) || 5 } }))} />
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={active.stage.gridSize}
+                    onChange={(event) => {
+                      const value = event.currentTarget.valueAsNumber;
+                      if (Number.isNaN(value)) return;
+                      updateActive((current) => ({ ...current, stage: { ...current.stage, gridSize: Math.max(0.1, value) } }));
+                    }}
+                  />
                 </Field>
                 <Field label={t.music}>
                   <input className={inputClass} value={active.music?.name || ""} onChange={(event) => updateActive((current) => ({ ...current, music: { ...current.music, name: event.target.value } }))} />
@@ -1279,14 +1342,10 @@ const App = () => {
                   <input
                     className={inputClass}
                     type="number"
-                    min="1.5"
-                    step="0.5"
-                    value={transitionSeconds}
-                    onChange={(event) => {
-                      const seconds = Math.max(1.5, Number(event.target.value) || 6);
-                      setTransitionSeconds(seconds);
-                      updateFormation(activeFormation.id, (formation) => ({ ...formation, durationSeconds: seconds }));
-                    }}
+                    min="0.1"
+                    step="0.1"
+                    value={transitionSecondsText}
+                    onChange={(event) => updateTransitionSeconds(event.target.value)}
                   />
                 </Field>
               </div>
@@ -1305,20 +1364,27 @@ const App = () => {
                 </Field>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                   <Field label={t.time}>
-                    <input className={inputClass} type="number" value={activeFormation.timestampSeconds} onChange={(event) => updateFormation(activeFormation.id, (formation) => ({ ...formation, timestampSeconds: Number(event.target.value) || 0 }))} />
+                    <input
+                      className={inputClass}
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={activeFormation.timestampSeconds}
+                      onChange={(event) => {
+                        const seconds = event.currentTarget.valueAsNumber;
+                        if (Number.isNaN(seconds)) return;
+                        updateFormation(activeFormation.id, (formation) => ({ ...formation, timestampSeconds: Math.max(0, seconds) }));
+                      }}
+                    />
                   </Field>
                   <Field label={t.duration}>
                     <input
                       className={inputClass}
                       type="number"
-                      min="1.5"
-                      step="0.5"
-                      value={activeFormation.durationSeconds || transitionSeconds}
-                      onChange={(event) => {
-                        const seconds = Math.max(1.5, Number(event.target.value) || 6);
-                        setTransitionSeconds(seconds);
-                        updateFormation(activeFormation.id, (formation) => ({ ...formation, durationSeconds: seconds }));
-                      }}
+                      min="0.1"
+                      step="0.1"
+                      value={transitionSecondsText}
+                      onChange={(event) => updateTransitionSeconds(event.target.value)}
                     />
                   </Field>
                 </div>
@@ -1347,10 +1413,32 @@ const App = () => {
                   </Field>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                     <Field label={t.width}>
-                      <input className={inputClass} type="number" value={selectedProp.width} onChange={(event) => updateProp(selectedProp.id, { width: Number(event.target.value) || 1 })} />
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={selectedProp.width}
+                        onChange={(event) => {
+                          const value = event.currentTarget.valueAsNumber;
+                          if (Number.isNaN(value)) return;
+                          updateProp(selectedProp.id, { width: Math.max(0.1, value) });
+                        }}
+                      />
                     </Field>
                     <Field label={t.height}>
-                      <input className={inputClass} type="number" value={selectedProp.height} onChange={(event) => updateProp(selectedProp.id, { height: Number(event.target.value) || 1 })} />
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={selectedProp.height}
+                        onChange={(event) => {
+                          const value = event.currentTarget.valueAsNumber;
+                          if (Number.isNaN(value)) return;
+                          updateProp(selectedProp.id, { height: Math.max(0.1, value) });
+                        }}
+                      />
                     </Field>
                   </div>
                   <Field label={t.color}>
@@ -1438,16 +1526,26 @@ const App = () => {
                               <input
                                 className={inputClass}
                                 type="number"
+                                step="0.1"
                                 value={activeFormation.positions[selectedDancer.id].path?.controlX ?? Math.round(((previousFormation?.positions[selectedDancer.id]?.x || activeFormation.positions[selectedDancer.id].x) + activeFormation.positions[selectedDancer.id].x) / 2)}
-                                onChange={(event) => updateDancerPath(selectedDancer.id, { controlX: Number(event.target.value) || 0 })}
+                                onChange={(event) => {
+                                  const value = event.currentTarget.valueAsNumber;
+                                  if (Number.isNaN(value)) return;
+                                  updateDancerPath(selectedDancer.id, { controlX: value });
+                                }}
                               />
                             </Field>
                             <Field label="Control Y">
                               <input
                                 className={inputClass}
                                 type="number"
+                                step="0.1"
                                 value={activeFormation.positions[selectedDancer.id].path?.controlY ?? Math.round(Math.min(previousFormation?.positions[selectedDancer.id]?.y || activeFormation.positions[selectedDancer.id].y, activeFormation.positions[selectedDancer.id].y) - 10)}
-                                onChange={(event) => updateDancerPath(selectedDancer.id, { controlY: Number(event.target.value) || 0 })}
+                                onChange={(event) => {
+                                  const value = event.currentTarget.valueAsNumber;
+                                  if (Number.isNaN(value)) return;
+                                  updateDancerPath(selectedDancer.id, { controlY: value });
+                                }}
                               />
                             </Field>
                           </div>
