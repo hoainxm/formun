@@ -67,7 +67,7 @@ const buildStageSvg = (choreography: Choreography, formationId: string, options:
             const from = previous.positions[dancer.id];
             const to = formation.positions[dancer.id];
             if (!from || !to) return "";
-            return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${colorClassToCss(dancer.color)}" stroke-width="0.55" stroke-dasharray="1.3 1" marker-end="url(#arrow)" />`;
+            return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="${colorClassToCss(to.color || dancer.color)}" stroke-width="0.55" stroke-dasharray="1.3 1" marker-end="url(#arrow)" />`;
           })
           .join("")
       : "";
@@ -88,7 +88,7 @@ const buildStageSvg = (choreography: Choreography, formationId: string, options:
     .map((dancer) => {
       const position = formation.positions[dancer.id];
       if (!position) return "";
-      const fill = colorClassToCss(dancer.color);
+      const fill = colorClassToCss(position.color || dancer.color);
       const label = options.labelMode === "name" ? dancer.name : options.labelMode === "both" ? `${dancer.label} ${dancer.name}` : dancer.label;
       const shape =
         dancer.shape === "square"
@@ -96,7 +96,7 @@ const buildStageSvg = (choreography: Choreography, formationId: string, options:
           : dancer.shape === "triangle"
             ? `<path d="M ${position.x} ${position.y - 2.7} L ${position.x + 2.6} ${position.y + 2.1} L ${position.x - 2.6} ${position.y + 2.1} Z" fill="${fill}" />`
             : `<circle cx="${position.x}" cy="${position.y}" r="2.45" fill="${fill}" />`;
-      return `<g class="pdf-dancer">${shape}<text x="${position.x}" y="${position.y + 0.45}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text></g>`;
+      return `<g class="pdf-dancer">${shape}<text x="${position.x}" y="${position.y + 0.45}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text><text class="pdf-dancer-name" x="${position.x}" y="${position.y + 5.1}" text-anchor="middle">${escapeHtml(dancer.name)}</text></g>`;
     })
     .join("");
 
@@ -170,7 +170,7 @@ export const exportChoreographyPdf = async (choreography: Choreography, options:
               <div class="rounded-lg border border-border p-3">
                 <div class="mb-2 text-xs font-semibold uppercase text-muted-foreground">Dancers</div>
                 <div class="grid grid-cols-2 gap-1 text-xs">
-                  ${sortedDancers.map((dancer) => `<div class="flex items-center gap-1"><span class="inline-block h-2 w-2 rounded-full ${dancer.color}"></span><span>${escapeHtml(dancer.label)} ${escapeHtml(dancer.name)}</span></div>`).join("")}
+                  ${sortedDancers.map((dancer) => `<div class="flex items-center gap-1"><span class="inline-block h-2 w-2 rounded-full ${formation.positions[dancer.id]?.color || dancer.color}"></span><span>${escapeHtml(dancer.label)} ${escapeHtml(dancer.name)}</span></div>`).join("")}
                 </div>
               </div>
               ${options.includeComments ? `<div class="rounded-lg border border-border p-3 text-sm"><div class="mb-1 text-xs font-semibold uppercase text-muted-foreground">Notes</div><div>${escapeHtml(formation.comments || "")}</div></div>` : ""}

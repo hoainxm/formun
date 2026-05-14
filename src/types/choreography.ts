@@ -33,6 +33,7 @@ export interface DancerPosition {
   x: number;
   y: number;
   rotation: number;
+  color?: string;
   path?: PathConfig;
 }
 

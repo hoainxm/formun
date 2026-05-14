@@ -58,6 +58,14 @@ select {
   font: inherit;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
 .stage-grid {
   background-image:
     linear-gradient(to right, hsl(var(--grid)) 1px, transparent 1px),
@@ -105,5 +113,11 @@ select {
 .pdf-dancer text {
   fill: hsl(var(--primary-foreground));
   font-size: 2.4px;
+  font-weight: 700;
+}
+
+.pdf-dancer .pdf-dancer-name {
+  fill: hsl(var(--foreground));
+  font-size: 1.8px;
   font-weight: 700;
 }

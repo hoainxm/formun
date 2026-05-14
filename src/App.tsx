@@ -183,6 +183,7 @@ const copy = {
     props: "Props",
     shape: "Shape",
     color: "Color",
+    formationColor: "Formation color",
     locked: "Locked",
     deleteProp: "Delete prop",
     selectProp: "Select a prop on stage.",
@@ -198,6 +199,8 @@ const copy = {
     pathUnavailable: "Path starts from second formation onward. Duplicate or choose next formation, move dancer, then press Create path.",
     deleteDancer: "Delete dancer",
     selectDancer: "Select a dancer on stage or list.",
+    selectedDancers: "selected dancers",
+    clearSelection: "Clear selection",
     includePaths: "Include paths",
     includeComments: "Include comments",
     labels: "Labels",
@@ -269,6 +272,7 @@ const copy = {
     props: "Đạo cụ",
     shape: "Hình",
     color: "Màu",
+    formationColor: "Màu formation",
     locked: "Khóa",
     deleteProp: "Xóa prop",
     selectProp: "Chọn prop trên stage.",
@@ -284,6 +288,8 @@ const copy = {
     pathUnavailable: "Path được tạo từ formation thứ hai trở đi. Hãy Duplicate hoặc chọn formation tiếp theo, di chuyển dancer, rồi bấm Tạo path.",
     deleteDancer: "Xóa dancer",
     selectDancer: "Chọn dancer trên stage hoặc trong danh sách.",
+    selectedDancers: "dancer đã chọn",
+    clearSelection: "Bỏ chọn",
     includePaths: "Bao gồm paths",
     includeComments: "Bao gồm ghi chú",
     labels: "Nhãn",
@@ -347,6 +353,7 @@ const App = () => {
   });
   const [activeFormationId, setActiveFormationId] = useState("");
   const [selectedDancerId, setSelectedDancerId] = useState("");
+  const [selectedDancerIds, setSelectedDancerIds] = useState<string[]>([]);
   const [selectedPropId, setSelectedPropId] = useState("");
   const [showGrid, setShowGrid] = useState(true);
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -388,6 +395,17 @@ const App = () => {
     document.documentElement.lang = language;
     document.title = copy[language].brand;
   }, [language]);
+
+  useEffect(() => {
+    const preventNumberWheel = (event: WheelEvent) => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "number") {
+        event.preventDefault();
+        event.target.blur();
+      }
+    };
+    window.addEventListener("wheel", preventNumberWheel, { passive: false });
+    return () => window.removeEventListener("wheel", preventNumberWheel);
+  }, []);
 
   useEffect(() => {
     if (sharedMode) return;
@@ -496,7 +514,9 @@ const App = () => {
     [active, activeFormation, sortedFormations],
   );
   const sortedDancers = useMemo(() => (active ? getSortedDancers(active) : []), [active]);
-  const selectedDancer = sortedDancers.find((dancer) => dancer.id === selectedDancerId);
+  const selectedDancer = sortedDancers.find((dancer) => dancer.id === selectedDancerId) || sortedDancers.find((dancer) => dancer.id === selectedDancerIds[0]);
+  const selectedDancerIdSet = useMemo(() => new Set(selectedDancerIds), [selectedDancerIds]);
+  const getFormationDancerColor = (dancer: Dancer) => activeFormation?.positions[dancer.id]?.color || dancer.color;
   const visibleProps = useMemo(
     () => active?.props.filter((prop) => !prop.formationId || prop.formationId === activeFormation?.id) || [],
     [active, activeFormation],
@@ -718,7 +738,7 @@ const App = () => {
         <section className="grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)_96px] gap-3">
           <header className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-primary-foreground/70">{active.name}</p>
+              <p className="text-sm text-muted-foreground">{active.name}</p>
               <h1 className="truncate text-2xl font-semibold">{activeFormation.name}</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -744,10 +764,10 @@ const App = () => {
             </div>
           </header>
           <div className="grid min-h-0 min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 p-2">
-              <div className="pb-2 text-center text-xs font-semibold tracking-wide text-primary-foreground/70">BACKSTAGE</div>
+            <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border bg-card p-2">
+              <div className="pb-2 text-center text-xs font-semibold tracking-wide text-muted-foreground">BACKSTAGE</div>
               <div
-                className={`relative max-h-full w-full overflow-hidden rounded-xl border border-primary-foreground/20 bg-stage ${showGrid ? "stage-grid" : ""}`}
+                className={`relative max-h-full w-full overflow-hidden rounded-xl border border-border bg-stage ${showGrid ? "stage-grid" : ""}`}
                 style={{
                   aspectRatio: `${active.stage.width} / ${active.stage.height}`,
                   backgroundSize: `${(active.stage.gridSize / active.stage.width) * 100}% ${(active.stage.gridSize / active.stage.height) * 100}%`,
@@ -785,41 +805,44 @@ const App = () => {
                   return (
                     <div
                       key={dancer.id}
-                      className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-sm font-semibold text-primary-foreground shadow-md ${dancer.color} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}
+                      className="absolute -translate-x-1/2 -translate-y-1/2"
                       style={{
                         left: `${(displayPosition.x / active.stage.width) * 100}%`,
                         top: `${(displayPosition.y / active.stage.height) * 100}%`,
                       }}
                     >
-                      <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
+                      <div className={`flex h-12 w-12 items-center justify-center border-2 border-background text-sm font-semibold text-primary-foreground shadow-md ring-1 ring-foreground/20 ${getFormationDancerColor(dancer)} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}>
+                        <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
+                      </div>
+                      <span className="pointer-events-none absolute left-1/2 top-14 max-w-28 -translate-x-1/2 truncate rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold text-foreground shadow-sm">{dancer.name}</span>
                     </div>
                   );
                 })}
               </div>
-              <div className="pt-2 text-center text-xs font-semibold tracking-wide text-primary-foreground/70">AUDIENCE</div>
+              <div className="pt-2 text-center text-xs font-semibold tracking-wide text-muted-foreground">AUDIENCE</div>
             </div>
-            <aside className="hidden min-h-0 min-w-0 overflow-hidden rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 p-3 lg:grid lg:grid-rows-[auto_auto_minmax(0,1fr)]">
-              <div className="text-sm text-primary-foreground/70">{formatTimestamp(activeFormation.timestampSeconds)} · {activeTransitionSeconds}s · {conflicts.length} path conflicts</div>
-              <div className="my-3 rounded-lg border border-primary-foreground/15 bg-primary-foreground/10 p-3 text-sm leading-6">
-                <div className="mb-1 text-xs font-semibold uppercase text-primary-foreground/60">{t.comment}</div>
+            <aside className="hidden min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-card p-3 lg:grid lg:grid-rows-[auto_auto_minmax(0,1fr)]">
+              <div className="text-sm text-muted-foreground">{formatTimestamp(activeFormation.timestampSeconds)} · {activeTransitionSeconds}s · {conflicts.length} path conflicts</div>
+              <div className="my-3 rounded-lg border border-border bg-muted/40 p-3 text-sm leading-6">
+                <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{t.comment}</div>
                 <p className="max-h-32 overflow-hidden whitespace-pre-wrap">{activeFormation.comments || t.noNotes}</p>
               </div>
               <div className="grid min-h-0 gap-2 overflow-y-auto pr-1">
                 {sortedFormations.map((formation, index) => (
                   <button
                     key={formation.id}
-                    className={`rounded-lg border p-2 text-left text-sm ${formation.id === activeFormation.id ? "border-primary bg-primary text-primary-foreground" : "border-primary-foreground/15 bg-primary-foreground/10 hover:bg-primary-foreground/20"}`}
+                    className={`rounded-lg border p-2 text-left text-sm ${formation.id === activeFormation.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"}`}
                     onClick={() => goToFormation(index)}
                   >
                     <div className="truncate font-semibold">{formation.name}</div>
-                    <div className="whitespace-nowrap text-xs text-primary-foreground/70">{formatTimestamp(formation.timestampSeconds)} · {formation.durationSeconds || transitionSeconds}s</div>
+                    <div className={`whitespace-nowrap text-xs ${formation.id === activeFormation.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{formatTimestamp(formation.timestampSeconds)} · {formation.durationSeconds || transitionSeconds}s</div>
                   </button>
                 ))}
               </div>
             </aside>
           </div>
           <footer
-            className="flex min-w-0 gap-2 overflow-x-auto rounded-xl border border-primary-foreground/20 bg-primary-foreground/10 p-2"
+            className="flex min-w-0 gap-2 overflow-x-auto rounded-xl border border-border bg-card p-2"
             onWheel={(event) => {
               if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
                 event.currentTarget.scrollLeft += event.deltaY;
@@ -830,11 +853,11 @@ const App = () => {
             {sortedFormations.map((formation, index) => (
               <button
                 key={formation.id}
-                className={`grid min-w-36 content-between rounded-lg border p-2 text-left text-xs ${formation.id === activeFormation.id ? "border-primary bg-primary text-primary-foreground" : "border-primary-foreground/15 bg-primary-foreground/10 hover:bg-primary-foreground/20"}`}
+                className={`grid min-w-36 content-between rounded-lg border p-2 text-left text-xs ${formation.id === activeFormation.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"}`}
                 onClick={() => goToFormation(index)}
               >
                 <span className="truncate font-semibold">{formation.name}</span>
-                <span className="mt-2 whitespace-nowrap text-primary-foreground/70">{formatTimestamp(formation.timestampSeconds)} · {formation.durationSeconds || transitionSeconds}s</span>
+                <span className={`mt-2 whitespace-nowrap ${formation.id === activeFormation.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{formatTimestamp(formation.timestampSeconds)} · {formation.durationSeconds || transitionSeconds}s</span>
               </button>
             ))}
           </footer>
@@ -909,7 +932,7 @@ const App = () => {
               return (
                 <div
                   key={dancer.id}
-                  className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-sm font-semibold text-primary-foreground shadow-md ${dancer.color} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}
+                  className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-sm font-semibold text-primary-foreground shadow-md ${getFormationDancerColor(dancer)} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}
                   style={{
                     left: `${(position.x / active.stage.width) * 100}%`,
                     top: `${(position.y / active.stage.height) * 100}%`,
@@ -1011,6 +1034,7 @@ const App = () => {
           }),
         }));
         setSelectedDancerId("");
+        setSelectedDancerIds((current) => current.filter((id) => id !== dancerId));
       },
       t.deleteDancer,
     );
@@ -1021,6 +1045,43 @@ const App = () => {
       ...current,
       dancers: current.dancers.map((dancer) => (dancer.id === dancerId ? { ...dancer, ...patch } : dancer)),
     }));
+  };
+
+  const updateSelectedDancers = (patch: Partial<Dancer>) => {
+    const ids = new Set(selectedDancerIds);
+    updateActive((current) => ({
+      ...current,
+      dancers: current.dancers.map((dancer) => (ids.has(dancer.id) ? { ...dancer, ...patch } : dancer)),
+    }));
+  };
+
+  const updateFormationDancerColors = (dancerIds: string[], color: string) => {
+    const ids = new Set(dancerIds);
+    updateFormation(activeFormation.id, (formation) => ({
+      ...formation,
+      positions: Object.fromEntries(
+        Object.entries(formation.positions).map(([id, position]) => [
+          id,
+          ids.has(id) ? { ...position, color } : position,
+        ]),
+      ),
+    }));
+  };
+
+  const selectOnlyDancer = (dancerId: string) => {
+    setSelectedDancerId(dancerId);
+    setSelectedDancerIds([dancerId]);
+    setSelectedPropId("");
+  };
+
+  const toggleDancerSelection = (dancerId: string) => {
+    setSelectedDancerIds((current) => {
+      const exists = current.includes(dancerId);
+      const next = exists ? current.filter((id) => id !== dancerId) : [...current, dancerId];
+      setSelectedDancerId(next[0] || "");
+      return next;
+    });
+    setSelectedPropId("");
   };
 
   const updateDancerPath = (dancerId: string, patch: Partial<NonNullable<DancerPosition["path"]>>) => {
@@ -1160,7 +1221,7 @@ const App = () => {
     const point = getStagePoint(event);
     dragRef.current = { type: "dancer", id: dancerId, startX: point.x, startY: point.y, originX: position.x, originY: position.y };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedDancerId(dancerId);
+    selectOnlyDancer(dancerId);
     setSelectedPropId("");
   };
 
@@ -1172,6 +1233,7 @@ const App = () => {
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedPropId(propId);
     setSelectedDancerId("");
+    setSelectedDancerIds([]);
   };
 
   const startPathControlDrag = (event: PointerEvent<HTMLButtonElement>, dancerId: string) => {
@@ -1183,7 +1245,7 @@ const App = () => {
     const point = getStagePoint(event);
     dragRef.current = { type: "path-control", id: dancerId, startX: point.x, startY: point.y, originX: controlX, originY: controlY };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setSelectedDancerId(dancerId);
+    selectOnlyDancer(dancerId);
     setSelectedPropId("");
   };
 
@@ -1364,20 +1426,31 @@ const App = () => {
               </div>
               <div className="grid max-h-64 gap-2 overflow-auto pr-1 xl:max-h-96">
                 {sortedDancers.map((dancer) => (
-                  <button
+                  <div
                     key={dancer.id}
-                    className={`flex items-center gap-3 rounded-lg border p-2 text-left text-sm ${selectedDancerId === dancer.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
-                    onClick={() => {
-                      setSelectedDancerId(dancer.id);
-                      setSelectedPropId("");
-                    }}
+                    className={`flex items-center gap-2 rounded-lg border p-2 text-left text-sm ${selectedDancerIdSet.has(dancer.id) ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
                   >
-                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-primary-foreground ${dancer.color}`}>{dancer.label}</span>
-                    <span className="min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedDancerIdSet.has(dancer.id)}
+                      onChange={() => toggleDancerSelection(dancer.id)}
+                      aria-label={`Select ${dancer.name}`}
+                    />
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-primary-foreground ${getFormationDancerColor(dancer)}`}>{dancer.label}</span>
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={(event) => {
+                        if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                          toggleDancerSelection(dancer.id);
+                        } else {
+                          selectOnlyDancer(dancer.id);
+                        }
+                      }}
+                    >
                       <span className="block truncate font-medium">{dancer.name}</span>
                       <span className="block text-xs text-muted-foreground">{dancer.shape}</span>
-                    </span>
-                  </button>
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -1484,18 +1557,23 @@ const App = () => {
                   const previousPosition = previousFormation?.positions[dancer.id];
                   const displayPosition = previousPosition && animationProgress < 1 ? getAnimatedPosition(previousPosition, position, animationProgress) : position;
                   return (
-                    <button
+                    <div
                       key={dancer.id}
-                      className={`absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-xs font-semibold text-primary-foreground shadow-md transition ${dancer.color} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"} ${selectedDancerId === dancer.id ? "ring-4 ring-primary/30" : ""}`}
+                      className="absolute -translate-x-1/2 -translate-y-1/2"
                       style={{
                         left: `${(displayPosition.x / active.stage.width) * 100}%`,
                         top: `${(displayPosition.y / active.stage.height) * 100}%`,
                       }}
-                      onPointerDown={(event) => startDancerDrag(event, dancer.id)}
-                      aria-label={dancer.name}
                     >
-                      <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
-                    </button>
+                      <button
+                        className={`flex h-10 w-10 items-center justify-center border-2 border-background text-xs font-semibold text-primary-foreground shadow-md ring-1 ring-foreground/20 transition ${getFormationDancerColor(dancer)} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"} ${selectedDancerIdSet.has(dancer.id) ? "ring-4 ring-primary" : ""}`}
+                        onPointerDown={(event) => startDancerDrag(event, dancer.id)}
+                        aria-label={dancer.name}
+                      >
+                        <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
+                      </button>
+                      <span className="pointer-events-none absolute left-1/2 top-11 max-w-24 -translate-x-1/2 truncate rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">{dancer.name}</span>
+                    </div>
                   );
                 })}
                 </div>
@@ -1720,7 +1798,38 @@ const App = () => {
 
             <div className={panelClass}>
               <h2 className="mb-2 text-sm font-semibold">{t.selection}</h2>
-              {selectedDancer ? (
+              {selectedDancerIds.length > 1 ? (
+                <div className="grid gap-3">
+                  <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
+                    <div className="font-semibold">{selectedDancerIds.length} {t.selectedDancers}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">{t.formationColor} / {t.shape}</p>
+                  </div>
+                  <Field label={t.shape}>
+                    <select className={inputClass} value="" onChange={(event) => updateSelectedDancers({ shape: event.target.value as Dancer["shape"] })}>
+                      <option value="" disabled>{t.shape}</option>
+                      {shapeOptions.map((shape) => <option key={shape}>{shape}</option>)}
+                    </select>
+                  </Field>
+                  <Field label={t.formationColor}>
+                    <div className="grid grid-cols-6 gap-2">
+                      {dancerColors.map((color) => (
+                        <button
+                          key={color}
+                          className={`h-9 rounded-lg border ${color} border-border`}
+                          onClick={() => updateFormationDancerColors(selectedDancerIds, color)}
+                          aria-label={`Choose ${color}`}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+                  <Button variant="secondary" onClick={() => {
+                    setSelectedDancerId("");
+                    setSelectedDancerIds([]);
+                  }}>
+                    {t.clearSelection}
+                  </Button>
+                </div>
+              ) : selectedDancer ? (
                 <div className="grid gap-3">
                   <Field label={t.name}>
                     <input className={inputClass} value={selectedDancer.name} onChange={(event) => updateDancer(selectedDancer.id, { name: event.target.value })} />
@@ -1735,13 +1844,13 @@ const App = () => {
                       </select>
                     </Field>
                   </div>
-                  <Field label={t.color}>
+                  <Field label={t.formationColor}>
                     <div className="grid grid-cols-6 gap-2">
                       {dancerColors.map((color) => (
                         <button
                           key={color}
-                          className={`h-9 rounded-lg border ${color} ${selectedDancer.color === color ? "border-foreground ring-2 ring-primary" : "border-border"}`}
-                          onClick={() => updateDancer(selectedDancer.id, { color })}
+                          className={`h-9 rounded-lg border ${color} ${getFormationDancerColor(selectedDancer) === color ? "border-foreground ring-2 ring-primary" : "border-border"}`}
+                          onClick={() => updateFormationDancerColors([selectedDancer.id], color)}
                           aria-label={`Choose ${color}`}
                         />
                       ))}
