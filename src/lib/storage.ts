@@ -2,6 +2,7 @@ import type { Choreography, DancerShape } from "../types/choreography";
 import { createId, getDefaultPosition } from "./geometry";
 
 const STORAGE_KEY = "formun.choreographies.v1";
+const FIREBASE_MIGRATION_KEY = "formun.firebaseMigrated.v1";
 
 export const dancerColors = [
   "bg-primary",
@@ -109,6 +110,23 @@ export const loadChoreographies = (): Choreography[] => {
 
 export const saveChoreographies = (items: Choreography[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+};
+
+export const loadStoredChoreographies = (): Choreography[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Choreography[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const hasMigratedToFirebase = () => localStorage.getItem(FIREBASE_MIGRATION_KEY) === "true";
+
+export const markMigratedToFirebase = () => {
+  localStorage.setItem(FIREBASE_MIGRATION_KEY, "true");
 };
 
 export const touchChoreography = (choreography: Choreography): Choreography => ({

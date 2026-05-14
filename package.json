@@ -12,6 +12,7 @@
   "dependencies": {
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
+    "firebase": "^11.10.0",
     "html2canvas-pro": "^1.6.4",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.462.0",

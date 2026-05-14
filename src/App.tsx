@@ -1,4 +1,5 @@
 import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import {
   ArrowLeftRight,
   ChevronLeft,
@@ -21,8 +22,10 @@ import {
 } from "lucide-react";
 import type { Choreography, Dancer, DancerPosition, DragState, Formation, StageProp } from "./types/choreography";
 import { clamp, createId, detectTrafficConflicts, formatTimestamp, getDefaultPosition, getPreviousFormation, getSortedDancers, getSortedFormations, snap } from "./lib/geometry";
-import { createDemoChoreography, dancerColors, loadChoreographies, saveChoreographies, touchChoreography } from "./lib/storage";
+import { createDemoChoreography, dancerColors, hasMigratedToFirebase, loadStoredChoreographies, markMigratedToFirebase, touchChoreography } from "./lib/storage";
 import { exportChoreographyPdf, type ExportPdfOptions } from "./lib/choreographyPdf";
+import { deleteCloudProject, loadCloudProjects, saveCloudProject } from "./lib/choreographyCloud";
+import { auth, authPersistenceReady, firebaseEnabled } from "./lib/firebaseClient";
 
 const shapeOptions = ["circle", "square", "triangle"] as const;
 const propShapeOptions = ["rectangle", "circle"] as const;
@@ -67,6 +70,7 @@ const groupClass = "flex shrink-0 flex-nowrap items-center gap-1.5 rounded-lg bo
 
 const nowIso = () => new Date().toISOString();
 const SHARE_PREFIX = "#share=";
+const BUILD_SESSION_KEY = "formun.lastBuildId.v1";
 
 const encodeShareData = (choreography: Choreography) => {
   const bytes = new TextEncoder().encode(JSON.stringify(choreography));
@@ -145,6 +149,22 @@ const copy = {
     projects: "Projects",
     searchProjects: "Search projects",
     localSaveNote: "Progress saves automatically on this device.",
+    cloudSave: "Cloud save",
+    accountHint: "Admin provides your account.",
+    email: "Email",
+    password: "Password",
+    login: "Login",
+    logout: "Logout",
+    saving: "Saving...",
+    saved: "Saved",
+    saveFailed: "Save failed",
+    firebaseMissing: "Firebase is not configured. Add Vercel env variables.",
+    loginFailed: "Login failed",
+    loadingProjects: "Loading projects...",
+    importLocalTitle: "Import local projects?",
+    importLocalMessage: "Local projects were found on this device. Import them to your account now?",
+    importLocal: "Import local",
+    skipImport: "Skip",
     formations: "formations",
     dancers: "dancers",
     stage: "Stage",
@@ -215,6 +235,22 @@ const copy = {
     projects: "Dự án",
     searchProjects: "Tìm project",
     localSaveNote: "Tiến độ tự lưu trên thiết bị này.",
+    cloudSave: "Lưu cloud",
+    accountHint: "Admin cung cấp tài khoản cho bạn.",
+    email: "Email",
+    password: "Mật khẩu",
+    login: "Đăng nhập",
+    logout: "Đăng xuất",
+    saving: "Đang lưu...",
+    saved: "Đã lưu",
+    saveFailed: "Lưu lỗi",
+    firebaseMissing: "Chưa cấu hình Firebase. Hãy thêm biến môi trường trên Vercel.",
+    loginFailed: "Đăng nhập thất bại",
+    loadingProjects: "Đang tải project...",
+    importLocalTitle: "Nhập project local?",
+    importLocalMessage: "Tìm thấy project local trên thiết bị này. Nhập lên tài khoản của bạn ngay?",
+    importLocal: "Nhập local",
+    skipImport: "Bỏ qua",
     formations: "đội hình",
     dancers: "dancer",
     stage: "Sân khấu",
@@ -301,13 +337,13 @@ const createBlankChoreography = (): Choreography => {
 };
 
 const App = () => {
+  const [sharedChoreography] = useState(() => loadSharedChoreography());
+  const sharedMode = Boolean(sharedChoreography);
   const [items, setItems] = useState<Choreography[]>(() => {
-    const shared = loadSharedChoreography();
-    return shared ? [shared] : loadChoreographies();
+    return sharedChoreography ? [sharedChoreography] : [];
   });
   const [activeId, setActiveId] = useState(() => {
-    const shared = loadSharedChoreography();
-    return shared?.id || loadChoreographies()[0]?.id || "";
+    return sharedChoreography?.id || "";
   });
   const [activeFormationId, setActiveFormationId] = useState("");
   const [selectedDancerId, setSelectedDancerId] = useState("");
@@ -320,6 +356,13 @@ const App = () => {
   const [showHelp, setShowHelp] = useState(false);
   const [language, setLanguage] = useState<"en" | "vi">("en");
   const [draftProjectName, setDraftProjectName] = useState("");
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(!sharedMode);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [cloudLoaded, setCloudLoaded] = useState(sharedMode);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">(sharedMode ? "idle" : "saved");
+  const [migrationItems, setMigrationItems] = useState<Choreography[] | null>(null);
   const [transitionSeconds, setTransitionSeconds] = useState(6);
   const [transitionSecondsText, setTransitionSecondsText] = useState("6");
   const [animationProgress, setAnimationProgress] = useState(1);
@@ -335,10 +378,7 @@ const App = () => {
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const animationRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    saveChoreographies(items);
-  }, [items]);
+  const saveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -348,6 +388,88 @@ const App = () => {
     document.documentElement.lang = language;
     document.title = copy[language].brand;
   }, [language]);
+
+  useEffect(() => {
+    if (sharedMode) return;
+    const firebaseAuth = auth;
+    if (!firebaseEnabled || !firebaseAuth) {
+      setAuthLoading(false);
+      return;
+    }
+    let unsubscribe: (() => void) | undefined;
+    authPersistenceReady.then(async () => {
+      const previousBuildId = localStorage.getItem(BUILD_SESSION_KEY);
+      if (previousBuildId !== __FORMUN_BUILD_ID__) {
+        localStorage.setItem(BUILD_SESSION_KEY, __FORMUN_BUILD_ID__);
+        await signOut(firebaseAuth).catch(() => undefined);
+      }
+      unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+        setAuthUser(user);
+        setAuthLoading(false);
+        if (!user) {
+          setItems([]);
+          setActiveId("");
+          setActiveFormationId("");
+          setCloudLoaded(false);
+          setSaveStatus("idle");
+        }
+      });
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [sharedMode]);
+
+  useEffect(() => {
+    if (sharedMode || !authUser) return;
+    let cancelled = false;
+    setAuthLoading(true);
+    setCloudLoaded(false);
+    loadCloudProjects(authUser.uid)
+      .then(async (projects) => {
+        if (cancelled) return;
+        if (projects.length > 0) {
+          setItems(projects);
+          setActiveId(projects[0]?.id || "");
+          setActiveFormationId(projects[0]?.formations[0]?.id || "");
+        } else {
+          const localItems = hasMigratedToFirebase() ? [] : loadStoredChoreographies();
+          if (localItems.length > 0) {
+            setMigrationItems(localItems);
+          } else {
+            const demo = createDemoChoreography();
+            await saveCloudProject(authUser.uid, demo);
+            if (cancelled) return;
+            setItems([demo]);
+            setActiveId(demo.id);
+            setActiveFormationId(demo.formations[0]?.id || "");
+          }
+        }
+        setCloudLoaded(true);
+        setSaveStatus("saved");
+      })
+      .catch(() => setSaveStatus("failed"))
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedMode, authUser]);
+
+  useEffect(() => {
+    if (sharedMode || !authUser || !cloudLoaded || items.length === 0) return;
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    setSaveStatus("saving");
+    saveTimerRef.current = window.setTimeout(() => {
+      Promise.all(items.map((item) => saveCloudProject(authUser.uid, item)))
+        .then(() => setSaveStatus("saved"))
+        .catch(() => setSaveStatus("failed"));
+    }, 1000);
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [sharedMode, authUser, cloudLoaded, items]);
 
   const active = useMemo(
     () => items.find((item) => item.id === activeId) || items[0],
@@ -395,6 +517,7 @@ const App = () => {
   );
   const activeFormationIndex = sortedFormations.findIndex((formation) => formation.id === activeFormation?.id);
   const t = copy[language];
+  const saveStatusLabel = saveStatus === "saving" ? t.saving : saveStatus === "failed" ? t.saveFailed : saveStatus === "saved" ? t.saved : "";
   const activeTransitionSeconds = Math.max(0.1, activeFormation?.durationSeconds || transitionSeconds || 6);
   const updateTransitionSeconds = (value: string) => {
     const normalized = value.replace(",", ".");
@@ -412,6 +535,59 @@ const App = () => {
   };
   const showNotice = (title: string, message: string) => {
     setNoticeDialog({ title, message });
+  };
+  const handleLogin = async () => {
+    if (!auth) return;
+    setAuthLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
+      setLoginPassword("");
+    } catch (error) {
+      showNotice(t.loginFailed, error instanceof Error ? error.message : t.loginFailed);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+  const handleLogout = async () => {
+    if (!auth) return;
+    await signOut(auth);
+  };
+  const importLocalProjects = async () => {
+    if (!authUser || !migrationItems) return;
+    setAuthLoading(true);
+    try {
+      await Promise.all(migrationItems.map((item) => saveCloudProject(authUser.uid, item)));
+      markMigratedToFirebase();
+      setItems(migrationItems);
+      setActiveId(migrationItems[0]?.id || "");
+      setActiveFormationId(migrationItems[0]?.formations[0]?.id || "");
+      setMigrationItems(null);
+      setCloudLoaded(true);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("failed");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+  const skipLocalImport = async () => {
+    if (!authUser) return;
+    const demo = createDemoChoreography();
+    setAuthLoading(true);
+    try {
+      await saveCloudProject(authUser.uid, demo);
+      markMigratedToFirebase();
+      setItems([demo]);
+      setActiveId(demo.id);
+      setActiveFormationId(demo.formations[0]?.id || "");
+      setMigrationItems(null);
+      setCloudLoaded(true);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("failed");
+    } finally {
+      setAuthLoading(false);
+    }
   };
   const goToFormation = (index: number) => {
     if (sortedFormations.length === 0) return;
@@ -468,10 +644,67 @@ const App = () => {
     };
   }, []);
 
+  if (!sharedMode && !firebaseEnabled) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <section className={`${panelClass} w-full max-w-md`}>
+          <h1 className="text-xl font-semibold">{t.cloudSave}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t.firebaseMissing}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!sharedMode && !authUser) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <section className={`${panelClass} w-full max-w-md`}>
+          <h1 className="text-xl font-semibold">{t.cloudSave}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t.accountHint}</p>
+          <div className="mt-4 grid gap-3">
+            <input className={inputClass} type="email" placeholder={t.email} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} />
+            <input className={inputClass} type="password" placeholder={t.password} value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onKeyDown={(event) => {
+              if (event.key === "Enter") handleLogin();
+            }} />
+            <Button onClick={handleLogin} disabled={authLoading || !loginEmail.trim() || !loginPassword}>{authLoading ? t.loadingProjects : t.login}</Button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!sharedMode && migrationItems) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <section className={`${panelClass} w-full max-w-md`}>
+          <h1 className="text-xl font-semibold">{t.importLocalTitle}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t.importLocalMessage}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={skipLocalImport} disabled={authLoading}>{t.skipImport}</Button>
+            <Button onClick={importLocalProjects} disabled={authLoading}>{t.importLocal}</Button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!sharedMode && authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <section className={`${panelClass} w-full max-w-sm text-center text-sm text-muted-foreground`}>{t.loadingProjects}</section>
+      </main>
+    );
+  }
+
   if (!active || !activeFormation) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Button onClick={() => setItems([createDemoChoreography()])}>
+        <Button onClick={() => {
+          const demo = createDemoChoreography();
+          setItems([demo]);
+          setActiveId(demo.id);
+          setActiveFormationId(demo.formations[0]?.id || "");
+        }}>
           <Plus className="h-4 w-4" />
           {t.createFirst}
         </Button>
@@ -720,7 +953,14 @@ const App = () => {
     requestConfirm(
       t.deleteProject,
       `Delete project "${active.name}"? This cannot be undone.`,
-      () => {
+      async () => {
+        if (!sharedMode && authUser) {
+          try {
+            await deleteCloudProject(authUser.uid, active.id);
+          } catch {
+            setSaveStatus("failed");
+          }
+        }
         const remaining = items.filter((item) => item.id !== active.id);
         setItems(remaining);
         setActiveId(remaining[0]?.id || "");
@@ -1084,7 +1324,18 @@ const App = () => {
                 </Button>
               </div>
               <input className={`${inputClass} mb-2 w-full`} placeholder={t.searchProjects} value={query} onChange={(event) => setQuery(event.target.value)} />
-              <p className="mb-2 text-xs text-muted-foreground">{t.localSaveNote}</p>
+              <div className="mb-2 rounded-lg border border-border bg-muted/40 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold">{t.cloudSave}</span>
+                  <span className={`text-[11px] ${saveStatus === "failed" ? "text-danger" : "text-muted-foreground"}`}>{sharedMode ? t.localSaveNote : saveStatusLabel}</span>
+                </div>
+                {!sharedMode && (
+                  <div className="mt-2 grid gap-2">
+                    <p className="truncate text-xs text-muted-foreground">{authUser?.email}</p>
+                    <Button variant="secondary" onClick={handleLogout}>{t.logout}</Button>
+                  </div>
+                )}
+              </div>
               <div className="grid max-h-56 gap-2 overflow-auto pr-1 xl:max-h-72">
                 {filteredItems.map((item) => (
                   <button
@@ -1653,12 +1904,12 @@ const App = () => {
                     <p className="mt-2">Present: phím trái/phải để chuyển formation, Space để phát lại transition hiện tại, Esc để thoát.</p>
                   </div>
                   <div className="grid gap-4 text-sm leading-6 md:grid-cols-2">
-                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Projects</h3><p>Đổi tên project bằng ô tiêu đề và bấm Lưu. Dữ liệu lưu local trên máy. JSON dùng để xuất/nhập file. Delete project sẽ hỏi xác nhận.</p></section>
+                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Projects</h3><p>Đổi tên project bằng ô tiêu đề và bấm Lưu. Dữ liệu lưu theo tài khoản Firebase do admin cấp. JSON chỉ dùng để backup hoặc chuyển dữ liệu thủ công. Delete project sẽ hỏi xác nhận.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Stage</h3><p>Width/Height/Grid cấu hình sân khấu. BACKSTAGE nằm phía trên, AUDIENCE nằm phía dưới và nằm ngoài stage. Grid hiện lưới, Snap bám dancer vào lưới.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Dancers</h3><p>Nút + thêm từng dancer. Chọn dancer để sửa tên, label, shape, màu. Kéo dancer trên stage để đặt vị trí cho formation hiện tại.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Timeline</h3><p>Bấm Formation để thêm formation mới. Bấm Duplicate để copy formation hiện tại. Lăn chuột trên timeline để scroll ngang khi có nhiều formation.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Path</h3><p>Path không phải thuộc toàn bộ formation. Path thuộc từng dancer trong formation hiện tại, và mô tả dancer đó đi từ formation trước sang formation hiện tại như thế nào. Ví dụ: ở Formation 2, chọn Dancer 3, bấm Tạo path, kéo chấm tròn để Dancer 3 đi vòng. Dancer khác không bị ảnh hưởng. Bấm Đường thẳng để reset path của dancer đang chọn.</p></section>
-                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Share / PDF</h3><p>Share tạo link chứa dữ liệu project hiện tại để người khác mở web và xem bản copy. Dữ liệu gốc vẫn lưu trên máy bạn bằng localStorage. PDF xuất stage, path, dancer list và notes.</p></section>
+                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Share / PDF</h3><p>Share tạo link chứa dữ liệu project hiện tại để người khác mở web và xem bản copy. Dữ liệu gốc vẫn lưu theo tài khoản của bạn trên Firebase. PDF xuất stage, path, dancer list và notes.</p></section>
                   </div>
                 </>
               ) : (
@@ -1669,12 +1920,12 @@ const App = () => {
                     <p className="mt-2">Present keys: Left/Right to change formation, Space to replay current transition, Esc to exit.</p>
                   </div>
                   <div className="grid gap-4 text-sm leading-6 md:grid-cols-2">
-                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Projects</h3><p>Rename with title field and Save. Data stays local on device. JSON exports/imports file data. Delete project asks for confirmation.</p></section>
+                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Projects</h3><p>Rename with title field and Save. Data saves to the Firebase account provided by admin. JSON is only for manual backup/import. Delete project asks for confirmation.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Stage</h3><p>Width, Height, and Grid configure the stage. BACKSTAGE is above, AUDIENCE is below, outside the stage. Grid shows guides, Snap locks dancers to grid points.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Dancers</h3><p>The + button adds one dancer. Select a dancer to edit name, label, shape, and color. Drag a dancer on stage to set its position for the active formation.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Timeline</h3><p>Formation adds a new formation. Duplicate copies the active formation. Use the mouse wheel over the timeline to scroll horizontally when there are many formations.</p></section>
                     <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Path</h3><p>Path is not global for whole formation. Path belongs to one dancer in current formation, and describes how that dancer moves from previous formation to current formation. Example: in Formation 2, select Dancer 3, press Create path, drag round point so Dancer 3 moves around traffic. Other dancers stay unchanged. Use Straight to reset selected dancer path.</p></section>
-                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Share / PDF</h3><p>Share creates link containing current project data so another person can open web app and view copy. Original data still stays on your machine in localStorage. PDF exports stage, paths, dancer list, and notes.</p></section>
+                    <section className="rounded-lg border border-border p-4"><h3 className="mb-2 font-semibold">Share / PDF</h3><p>Share creates link containing current project data so another person can open web app and view copy. Original data saves to your Firebase account. PDF exports stage, paths, dancer list, and notes.</p></section>
                   </div>
                 </>
               )}
