@@ -96,7 +96,7 @@ const buildStageSvg = (choreography: Choreography, formationId: string, options:
           : dancer.shape === "triangle"
             ? `<path d="M ${position.x} ${position.y - 2.7} L ${position.x + 2.6} ${position.y + 2.1} L ${position.x - 2.6} ${position.y + 2.1} Z" fill="${fill}" />`
             : `<circle cx="${position.x}" cy="${position.y}" r="2.45" fill="${fill}" />`;
-      return `<g class="pdf-dancer">${shape}<text x="${position.x}" y="${position.y + 0.45}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text><text class="pdf-dancer-name" x="${position.x}" y="${position.y + 5.1}" text-anchor="middle">${escapeHtml(dancer.name)}</text></g>`;
+      return `<g class="pdf-dancer">${shape}<text x="${position.x}" y="${position.y + 0.45}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text></g>`;
     })
     .join("");
 

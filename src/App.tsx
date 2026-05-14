@@ -814,7 +814,6 @@ const App = () => {
                       <div className={`flex h-12 w-12 items-center justify-center border-2 border-background text-sm font-semibold text-primary-foreground shadow-md ring-1 ring-foreground/20 ${getFormationDancerColor(dancer)} ${dancer.shape === "circle" ? "rounded-full" : dancer.shape === "square" ? "rounded-lg" : "rounded-full rotate-45"}`}>
                         <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
                       </div>
-                      <span className="pointer-events-none absolute left-1/2 top-14 max-w-28 -translate-x-1/2 truncate rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[11px] font-semibold text-foreground shadow-sm">{dancer.name}</span>
                     </div>
                   );
                 })}
@@ -1572,7 +1571,6 @@ const App = () => {
                       >
                         <span className={dancer.shape === "triangle" ? "-rotate-45" : ""}>{dancer.label}</span>
                       </button>
-                      <span className="pointer-events-none absolute left-1/2 top-11 max-w-24 -translate-x-1/2 truncate rounded-md border border-border bg-card/90 px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm">{dancer.name}</span>
                     </div>
                   );
                 })}
